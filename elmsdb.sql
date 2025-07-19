@@ -1,31 +1,8 @@
--- phpMyAdmin SQL Dump
--- version 5.2.1
--- https://www.phpmyadmin.net/
---
--- Host: 127.0.0.1
--- Generation Time: May 24, 2025 at 08:23 AM
--- Server version: 10.4.32-MariaDB
--- PHP Version: 8.0.30
+
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8mb4 */;
-
---
--- Database: elmsdb
---
-
--- --------------------------------------------------------
-
---
--- Table structure for table admin
---
 
 CREATE TABLE admin (
   id int(11) NOT NULL,
@@ -39,9 +16,7 @@ CREATE TABLE admin (
 --
 
 INSERT INTO admin (id, UserName, Password, updationDate) VALUES
-(1, 'admin', 'admin', '2025-05-22 05:00:54');
-
--- --------------------------------------------------------
+(1, 'admin', 'admin', '2025-05-22 05:00:54')-- --------------------------------------------------------
 
 --
 -- Table structure for table tbldepartments
@@ -67,9 +42,7 @@ INSERT INTO tbldepartments (id, DepartmentName, DepartmentShortName, DepartmentC
 (4, 'ADMIN', 'Admin', 'ADMN01','NULL','2023-09-01 11:35:50'),
 (5, 'Information Communication Technology', 'BICT', 'BICT1','T1', '2023-08-31 14:51:26'),
 (6, 'Banking and Finance', 'BF', 'BF1','BS1', '2023-08-31 14:51:26'),
-(7, 'Project Management', 'PM', 'PM1','BS1', '2023-08-31 14:51:26');
-
--- --------------------------------------------------------
+(7, 'Project Management', 'PM', 'PM1','BS1', '2023-08-31 14:51:26');-- --------------------------------------------------------
 
 --
 -- Table structure for table tblemployees
