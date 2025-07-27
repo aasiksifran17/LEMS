@@ -1,172 +1,271 @@
 <?php
 session_start();
-error_reporting(0);
 include('includes/config.php');
-if(strlen($_SESSION['emplogin'])==0)
-    {   
-header('location:index.php');
-}
-else{
-if(isset($_POST['apply']))
-{
-$empid=$_SESSION['eid'];
- $leavetype=$_POST['leavetype'];
-$fromdate=$_POST['fromdate'];  
-$todate=$_POST['todate'];
-$description=$_POST['description'];  
-$status=0;
-$isread=0;
-if($fromdate > $todate){
-                $error=" ToDate should be greater than FromDate ";
-           }
-$sql="INSERT INTO tblleaves(LeaveType,ToDate,FromDate,Description,Status,IsRead,empid) VALUES(:leavetype,:todate,:fromdate,:description,:status,:isread,:empid)";
-$query = $dbh->prepare($sql);
-$query->bindParam(':leavetype',$leavetype,PDO::PARAM_STR);
-$query->bindParam(':fromdate',$fromdate,PDO::PARAM_STR);
-$query->bindParam(':todate',$todate,PDO::PARAM_STR);
-$query->bindParam(':description',$description,PDO::PARAM_STR);
-$query->bindParam(':status',$status,PDO::PARAM_STR);
-$query->bindParam(':isread',$isread,PDO::PARAM_STR);
-$query->bindParam(':empid',$empid,PDO::PARAM_STR);
-$query->execute();
-$lastInsertId = $dbh->lastInsertId();
-if($lastInsertId)
-{
-$msg="Leave applied successfully";
-}
-else 
-{
-$error="Something went wrong. Please try again";
+require_once('includes/LeaveManager.php');
+
+// Check if user is logged in
+if(strlen($_SESSION['emplogin'])==0) {
+    header('location:index.php');
+    exit();
 }
 
+$employeeId = $_SESSION['eid'];
+$leaveManager = new LeaveManager($dbh);
+$error = '';
+
+// Get available leave types
+try {
+    $availableLeaveTypes = $leaveManager->getAvailableLeaveTypes($employeeId);
+} catch (Exception $e) {
+    $error = "Error loading leave types: " . $e->getMessage();
 }
 
-    ?>
+// Process form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $leaveTypeId = $_POST['leavetype'] ?? 0;
+        $fromDate = $_POST['fromdate'] ?? '';
+        $toDate = $_POST['todate'] ?? '';
+        $description = $_POST['description'] ?? '';
+        
+        // Find selected leave type
+        $selectedLeaveType = array_filter($availableLeaveTypes, fn($t) => $t['id'] == $leaveTypeId);
+        if (empty($selectedLeaveType)) {
+            throw new Exception('Invalid leave type selected');
+        }
+        $selectedLeaveType = reset($selectedLeaveType);
+        
+        // Submit leave request
+        $leaveId = $leaveManager->submitLeaveRequest([
+            'employee_id' => $employeeId,
+            'leave_type_id' => $leaveTypeId,
+            'leave_type_name' => $selectedLeaveType['LeaveType'],
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'description' => $description
+        ]);
+        
+        $_SESSION['success'] = "Leave request submitted successfully. Reference ID: " . $leaveId;
+        header('Location: leave-history.php');
+        exit();
+        
+    } catch (Exception $e) {
+        $error = "Error: " . $e->getMessage();
+    }
+}
+
+// Get today's date in YYYY-MM-DD format for the date input min attribute
+$today = date('Y-m-d');
+?>
 
 <!DOCTYPE html>
 <html lang="en">
-    <head>
+<head>
+    <meta charset="utf-8">
+    <title>Apply For Leave</title>
+    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        /* Style for modern date inputs */
+        input[type="date"] {
+            position: relative;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 38px;
+        }
         
-        <!-- Title -->
-        <title>Employe | Apply Leave</title>
+        /* Hide the default calendar icon in WebKit browsers */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            color: transparent;
+            background: transparent;
+        }
         
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-        <meta charset="UTF-8">
-        <meta name="description" content="Responsive Admin Dashboard Template" />
-        <meta name="keywords" content="admin,dashboard" />
-        <meta name="author" content="Steelcoders" />
+        /* Custom calendar icon */
+        .date-input-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
         
-        <!-- Styles -->
-        <link type="text/css" rel="stylesheet" href="assets/plugins/materialize/css/materialize.min.css"/>
-        <link href="http://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-        <link href="assets/plugins/material-preloader/css/materialPreloader.min.css" rel="stylesheet"> 
-        <link href="assets/css/alpha.min.css" rel="stylesheet" type="text/css"/>
-        <link href="assets/css/custom.css" rel="stylesheet" type="text/css"/>
-  <style>
-        .errorWrap {
-    padding: 10px;
-    margin: 0 0 20px 0;
-    background: #fff;
-    border-left: 4px solid #dd3d36;
-    -webkit-box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
-    box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
-}
-.succWrap{
-    padding: 10px;
-    margin: 0 0 20px 0;
-    background: #fff;
-    border-left: 4px solid #5cb85c;
-    -webkit-box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
-    box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
-}
-        </style>
- 
-
-
-    </head>
-    <body>
-  <?php include('includes/header.php');?>
+        .date-input-container:after {
+            content: '\f073';
+            font-family: 'FontAwesome';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <?php include('includes/header.php'); ?>
+    
+    <div class="container">
+        <div class="row">
+            <?php include('includes/sidebar.php'); ?>
             
-       <?php include('includes/sidebar.php');?>
-   <main class="mn-inner">
-                <div class="row">
-                    <div class="col s12">
-                        <div class="page-title">Apply for Leave</div>
+            <div class="col-md-9">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Apply For Leave</h3>
                     </div>
-                    <div class="col s12 m12 l8">
-                        <div class="card">
-                            <div class="card-content">
-                                <form id="example-form" method="post" name="addemp">
-                                    <div>
-                                        <h3>Apply for Leave</h3>
-                                        <section>
-                                            <div class="wizard-content">
-                                                <div class="row">
-                                                    <div class="col m12">
-                                                        <div class="row">
-     <?php if($error){?><div class="errorWrap"><strong>ERROR </strong>:<?php echo htmlentities($error); ?> </div><?php } 
-                else if($msg){?><div class="succWrap"><strong>SUCCESS</strong>:<?php echo htmlentities($msg); ?> </div><?php }?>
-
-
- <div class="input-field col  s12">
-<select  name="leavetype" autocomplete="off">
-<option value="">Select leave type...</option>
-<?php $sql = "SELECT  LeaveType from tblleavetype";
-$query = $dbh -> prepare($sql);
-$query->execute();
-$results=$query->fetchAll(PDO::FETCH_OBJ);
-$cnt=1;
-if($query->rowCount() > 0)
-{
-foreach($results as $result)
-{   ?>                                            
-<option value="<?php echo htmlentities($result->LeaveType);?>"><?php echo htmlentities($result->LeaveType);?></option>
-<?php }} ?>
-</select>
-</div>
-
-
-<div class="input-field col m6 s12">
-<label for="fromdate">From  Date</label>
-<input placeholder="" id="mask1" name="fromdate" class="masked" type="text" data-inputmask="'alias': 'date'" required>
-</div>
-<div class="input-field col m6 s12">
-<label for="todate">To Date</label>
-<input placeholder="" id="mask1" name="todate" class="masked" type="text" data-inputmask="'alias': 'date'" required>
-</div>
-<div class="input-field col m12 s12">
-<label for="birthdate">Description</label>    
-
-<textarea id="textarea1" name="description" class="materialize-textarea" length="500" required></textarea>
-</div>
-</div>
-      <button type="submit" name="apply" id="apply" class="waves-effect waves-light btn indigo m-b-xs">Apply</button>                                             
-
-                                                </div>
-                                            </div>
-                                        </section>
-                                     
-                                    
-                                        </section>
-                                    </div>
-                                </form>
+                    <div class="panel-body">
+                        <?php if ($error): ?>
+                            <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                        <?php endif; ?>
+                        
+                        <form id="leaveForm" method="post">
+                            <div class="form-group">
+                                <label>Leave Type</label>
+                                <select class="form-control" name="leavetype" required>
+                                    <option value="">-- Select --</option>
+                                    <?php foreach ($availableLeaveTypes as $type): ?>
+                                        <option value="<?php echo $type['id']; ?>">
+                                            <?php echo htmlspecialchars($type['LeaveType']); ?>
+                                            (<?php echo $type['days_per_year']; ?> days)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
-                        </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>From Date</label>
+                                        <div class="date-input-container">
+                                            <input type="date" class="form-control" name="fromdate" 
+                                                   min="<?php echo $today; ?>" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>To Date</label>
+                                        <div class="date-input-container">
+                                            <input type="date" class="form-control" name="todate" 
+                                                   min="<?php echo $today; ?>" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Working Days</label>
+                                <input type="text" class="form-control" id="numofdays" readonly>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Description</label>
+                                <textarea class="form-control" name="description" rows="3" required></textarea>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Submit</button>
+                        </form>
                     </div>
                 </div>
-            </main>
+            </div>
         </div>
-        <div class="left-sidebar-hover"></div>
+    </div>
+    
+    <script src="assets/js/jquery-1.11.1.min.js"></script>
+    <script src="assets/js/bootstrap.min.js"></script>
+    <script>
+    // Function to get next working day (skip weekends)
+    function getNextWorkingDay(date) {
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
         
-        <!-- Javascripts -->
-        <script src="assets/plugins/jquery/jquery-2.2.0.min.js"></script>
-        <script src="assets/plugins/materialize/js/materialize.min.js"></script>
-        <script src="assets/plugins/material-preloader/js/materialPreloader.min.js"></script>
-        <script src="assets/plugins/jquery-blockui/jquery.blockui.js"></script>
-        <script src="assets/js/alpha.min.js"></script>
-        <script src="assets/js/pages/form_elements.js"></script>
-          <script src="assets/js/pages/form-input-mask.js"></script>
-                <script src="assets/plugins/jquery-inputmask/jquery.inputmask.bundle.js"></script>
-    </body>
+        // Skip weekends (0 = Sunday, 6 = Saturday)
+        while (nextDay.getDay() === 0 || nextDay.getDay() === 6) {
+            nextDay.setDate(nextDay.getDate() + 1);
+        }
+        
+        return nextDay;
+    }
+    
+    // Format date as YYYY-MM-DD
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    $(document).ready(function() {
+        // Set default dates
+        const today = new Date();
+        const tomorrow = getNextWorkingDay(today);
+        
+        // Set default from date (today)
+        $('input[name="fromdate"]').val(formatDate(today));
+        
+        // Set default to date (next working day)
+        $('input[name="todate"]').val(formatDate(tomorrow));
+        
+        // Update min date for to date when from date changes
+        $('input[name="fromdate"]').on('change', function() {
+            const fromDate = new Date($(this).val());
+            $('input[name="todate"]').attr('min', $(this).val());
+            
+            // If to date is before from date, update it
+            const toDate = new Date($('input[name="todate"]').val());
+            if (toDate < fromDate) {
+                $('input[name="todate"]').val($(this).val());
+            }
+            
+            calculateWorkingDays();
+        });
+        
+        // Calculate working days when either date changes
+        $('input[name="todate"]').on('change', function() {
+            calculateWorkingDays();
+        });
+        
+        // Initial calculation
+        calculateWorkingDays();
+        
+        // Calculate working days between two dates (excluding weekends)
+        function calculateWorkingDays() {
+            const fromDate = new Date($('input[name="fromdate"]').val());
+            const toDate = new Date($('input[name="todate"]').val());
+            
+            if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+                $('#numofdays').val('0');
+                return;
+            }
+            
+            // Swap dates if from date is after to date
+            if (fromDate > toDate) {
+                const temp = $('input[name="fromdate"]').val();
+                $('input[name="fromdate"]').val($('input[name="todate"]').val());
+                $('input[name="todate"]').val(temp);
+                return calculateWorkingDays();
+            }
+            
+            let workingDays = 0;
+            const currentDate = new Date(fromDate);
+            
+            while (currentDate <= toDate) {
+                const dayOfWeek = currentDate.getDay();
+                // Check if it's a weekday (0 = Sunday, 6 = Saturday)
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    workingDays++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            $('#numofdays').val(workingDays);
+        }
+    });
+    </script>
+</body>
 </html>
-<?php } ?> 
