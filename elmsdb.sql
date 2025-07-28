@@ -54,6 +54,66 @@ CREATE TABLE tblemployees (
   employeetype varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
+-- --- LEMS EXTENSION: Add columns and tables for LeaveManager compatibility ---
+-- Add missing columns to tblemployees table
+ALTER TABLE tblemployees 
+ADD COLUMN role VARCHAR(50) DEFAULT 'employee' AFTER EmailId,
+ADD COLUMN gender VARCHAR(10) DEFAULT 'Male' AFTER role,
+ADD COLUMN position VARCHAR(100) DEFAULT 'Staff' AFTER gender;
+
+-- Create position levels table if not exists
+CREATE TABLE IF NOT EXISTS tbl_position_levels (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    position_name VARCHAR(100) NOT NULL,
+    level INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- Create leave limits table if not exists
+CREATE TABLE IF NOT EXISTS tbl_leave_limits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    leave_type_id INT NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    days_per_year INT NOT NULL,
+    is_carry_forward TINYINT(1) DEFAULT 0,
+    max_carry_forward_days INT DEFAULT 0,
+    FOREIGN KEY (leave_type_id) REFERENCES tblleavetype(id)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- Insert default position levels if not exists
+INSERT IGNORE INTO tbl_position_levels (position_name, level) VALUES
+('Staff', 1),
+('Senior Staff', 2),
+('Manager', 3),
+('Director', 4);
+
+-- Insert default leave limits for employee role if not exists
+INSERT IGNORE INTO tbl_leave_limits (leave_type_id, role, days_per_year, is_carry_forward, max_carry_forward_days)
+SELECT id, 'employee', 
+    CASE 
+        WHEN LeaveType = 'Annual Leave' THEN 30
+        WHEN LeaveType = 'Casual Leave' THEN 30
+        WHEN LeaveType = 'Medical Leave' THEN 20
+        WHEN LeaveType = 'Maternity Leave' THEN 84
+        WHEN LeaveType = 'Paternity Leave' THEN 3
+        WHEN LeaveType = 'Study Leave' THEN 365
+        WHEN LeaveType = 'Sabbatical Leave' THEN 365
+        WHEN LeaveType = 'Duty Leave' THEN 90
+        WHEN LeaveType = 'No Pay Leave' THEN 365
+        ELSE 10 
+    END,
+    1,  -- is_carry_forward
+    5   -- max_carry_forward_days
+FROM tblleavetype
+WHERE id NOT IN (SELECT leave_type_id FROM tbl_leave_limits WHERE role = 'employee');
+
+-- Update existing employees with default values if needed
+UPDATE tblemployees SET 
+    role = 'employee',
+    gender = COALESCE(gender, 'Male'),
+    position = COALESCE(position, 'Staff')
+WHERE role IS NULL OR gender IS NULL OR position IS NULL;
+-- --- END LEMS EXTENSION ---
+
 -- Dumping data for table tblemployees
 INSERT INTO tblemployees (id, EmpId, FirstName, LastName, EmailId, Password, Gender, DepartmentCode, Phonenumber, Status, RegDate, Faculty, employeetype) VALUES
 (6, '2020/ASP/93', 'Fatima', 'Zhuzana', 'fatimazhuzana123@gmail.com', '25f9e794323b453885f5181f1b624d0b', 'Female', 'Human Resource', '025796416', 1, '2025-05-22 05:35:57', NULL, NULL);

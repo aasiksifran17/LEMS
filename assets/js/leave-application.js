@@ -35,6 +35,91 @@ $(document).ready(function() {
     // Calculate working days on page load
     calculateWorkingDays();
 
+    // Leave type validation rules
+    const leaveTypeLimits = {
+        'Annual Leave': { max: 30 },
+        'Casual Leave': { max: 30 },
+        'Medical Leave': { max: 20 },
+        'Maternity Leave': { max: 84, gender: 'Female' },
+        'Paternity Leave': { max: 3, gender: 'Male' },
+        'Study Leave': { max: 365, approval: true },
+        'Sabbatical Leave': { max: 365, staff: 'Senior Staff' },
+        'Duty Leave': { max: 90 },
+        'No Pay Leave': { max: 365 }
+    };
+
+    function getSelectedLeaveType() {
+        return $('select[name="leavetype"]').val();
+    }
+
+    function getUserGender() {
+        // Replace with actual gender detection if available
+        return $('#user-gender').val() || 'Male';
+    }
+    function getUserStaffType() {
+        // Replace with actual staff type detection if available
+        return $('#user-stafftype').val() || 'Staff';
+    }
+
+    function showLeaveError(msg) {
+        $('#leave-error').remove();
+        $('<div id="leave-error" style="color:red;margin:10px 0;">'+msg+'</div>').insertBefore('form#example-form');
+        $('#apply').prop('disabled', true);
+    }
+    function clearLeaveError() {
+        $('#leave-error').remove();
+        $('#apply').prop('disabled', false);
+    }
+
+    function validateLeaveDays() {
+        clearLeaveError();
+        const leaveType = getSelectedLeaveType();
+        if (!leaveType) return;
+        const limits = leaveTypeLimits[leaveType];
+        if (!limits) return;
+        const from = $('input[name="fromdate"]').val();
+        const to = $('input[name="todate"]').val();
+        if (!from || !to) return;
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        let days = 0;
+        let current = new Date(fromDate);
+        while (current <= toDate) {
+            // Exclude weekends
+            if (current.getDay() !== 0 && current.getDay() !== 6) days++;
+            current.setDate(current.getDate() + 1);
+        }
+        // Gender rule
+        if (limits.gender && limits.gender !== getUserGender()) {
+            showLeaveError(leaveType + ' is only allowed for ' + limits.gender + 's.');
+            return false;
+        }
+        // Staff rule
+        if (limits.staff && limits.staff !== getUserStaffType()) {
+            showLeaveError(leaveType + ' is only allowed for ' + limits.staff + '.');
+            return false;
+        }
+        // Max days rule
+        if (days > limits.max) {
+            showLeaveError(leaveType + ' allows a maximum of ' + limits.max + ' days. You selected ' + days + ' days.');
+            return false;
+        }
+        // Approval rule (for Study, Sabbatical, No Pay, etc. - can be extended)
+        // If you want to add approval logic, do it here
+        clearLeaveError();
+        return true;
+    }
+
+    $('select[name="leavetype"], input[name="fromdate"], input[name="todate"]').on('change', function() {
+        validateLeaveDays();
+    });
+
+    $('form#example-form').on('submit', function(e) {
+        if (!validateLeaveDays()) {
+            e.preventDefault();
+        }
+    });
+
     // Leave type change handler
     $('select[name="leavetype"]').on('change', function() {
         updateLeaveBalance();
